@@ -69,7 +69,7 @@ def play_quiz(quizzes):
     """퀴즈 진행 및 점수 계산"""
     if not quizzes:
         print("\n등록된 퀴즈가 없습니다.")
-        return
+        return None
 
     score = 0
     total = len(quizzes)
@@ -83,7 +83,7 @@ def play_quiz(quizzes):
         answer = get_answer()
 
         if answer is None:
-            return
+            return None
 
         if quiz.check_answer(answer):
             print("정답입니다!")
@@ -96,6 +96,8 @@ def play_quiz(quizzes):
     print("\n===== 퀴즈 결과 =====")
     print(f"정답 개수: {score}/{total}")
     print(f"최종 점수: {percentage}점")
+
+    return percentage
 
 
 def get_nonempty_input(prompt):
@@ -161,24 +163,38 @@ def show_quiz_list(quizzes):
 
     for index, quiz in enumerate(quizzes, start=1):
         print(f"\n----- {index}번 퀴즈 -----")
-
         quiz.display()
-
         print(f"정답: {quiz.answer}번")
 
     print("\n===== 목록 출력 완료 =====")
 
 
+def show_best_score(best_score):
+    """최고 점수 출력"""
+    print("\n===== 최고 점수 =====")
+
+    if best_score is None:
+        print("아직 퀴즈를 완료한 기록이 없습니다.")
+    else:
+        print(f"현재 최고 점수: {best_score}점")
+
+
 def main():
     """게임 실행"""
     quizzes = get_default_quizzes()
+    best_score = None
 
     while True:
         show_menu()
         choice = get_menu_choice()
 
         if choice == 1:
-            play_quiz(quizzes)
+            current_score = play_quiz(quizzes)
+
+            if current_score is not None:
+                if best_score is None or current_score > best_score:
+                    best_score = current_score
+                    print("새로운 최고 점수를 달성했습니다!")
 
         elif choice == 2:
             add_quiz(quizzes)
@@ -187,7 +203,7 @@ def main():
             show_quiz_list(quizzes)
 
         elif choice == 4:
-            print("\n[최고 점수 확인] 기능 준비 중입니다.")
+            show_best_score(best_score)
 
         elif choice == 5:
             print("\n게임을 종료합니다.")
