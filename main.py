@@ -1,6 +1,7 @@
 
 # 코디세이 2주차 Python 퀴즈 게임
 
+from quiz import Quiz
 from quiz_data import get_default_quizzes
 
 
@@ -97,6 +98,57 @@ def play_quiz(quizzes):
     print(f"최종 점수: {percentage}점")
 
 
+def get_nonempty_input(prompt):
+    """빈 문자열을 허용하지 않는 입력 함수"""
+    while True:
+        try:
+            value = input(prompt).strip()
+
+            if value:
+                return value
+
+            print("빈 내용은 입력할 수 없습니다.")
+
+        except (KeyboardInterrupt, EOFError):
+            print("\n퀴즈 추가를 취소합니다.")
+            return None
+
+
+def add_quiz(quizzes):
+    """새로운 퀴즈 추가"""
+    print("\n===== 새로운 퀴즈 추가 =====")
+
+    question = get_nonempty_input("문제를 입력하세요: ")
+
+    if question is None:
+        return
+
+    choices = []
+
+    for number in range(1, 5):
+        choice = get_nonempty_input(f"{number}번 선택지: ")
+
+        if choice is None:
+            return
+
+        choices.append(choice)
+
+    answer = get_answer()
+
+    if answer is None:
+        return
+
+    try:
+        new_quiz = Quiz(question, choices, answer)
+        quizzes.append(new_quiz)
+
+        print("\n새로운 퀴즈가 등록되었습니다!")
+        print(f"현재 등록된 퀴즈: {len(quizzes)}개")
+
+    except ValueError as error:
+        print(f"퀴즈 등록 실패: {error}")
+
+
 def main():
     """게임 실행"""
     quizzes = get_default_quizzes()
@@ -109,7 +161,7 @@ def main():
             play_quiz(quizzes)
 
         elif choice == 2:
-            print("\n[퀴즈 추가하기] 기능 준비 중입니다.")
+            add_quiz(quizzes)
 
         elif choice == 3:
             print("\n[퀴즈 목록 보기] 기능 준비 중입니다.")
