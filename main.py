@@ -149,6 +149,26 @@ def add_quiz(quizzes):
         print(f"퀴즈 등록 실패: {error}")
 
 
+def show_quiz_list(quizzes):
+    """등록된 퀴즈 목록 출력"""
+    print("\n===== 전체 퀴즈 목록 =====")
+
+    if not quizzes:
+        print("등록된 퀴즈가 없습니다.")
+        return
+
+    print(f"총 {len(quizzes)}개의 퀴즈가 등록되어 있습니다.")
+
+    for index, quiz in enumerate(quizzes, start=1):
+        print(f"\n----- {index}번 퀴즈 -----")
+
+        quiz.display()
+
+        print(f"정답: {quiz.answer}번")
+
+    print("\n===== 목록 출력 완료 =====")
+
+
 def main():
     """게임 실행"""
     quizzes = get_default_quizzes()
@@ -164,7 +184,7 @@ def main():
             add_quiz(quizzes)
 
         elif choice == 3:
-            print("\n[퀴즈 목록 보기] 기능 준비 중입니다.")
+            show_quiz_list(quizzes)
 
         elif choice == 4:
             print("\n[최고 점수 확인] 기능 준비 중입니다.")
