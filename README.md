@@ -246,3 +246,13 @@ main 브랜치에 병합했습니다.
 
 GitHub:
 https://github.com/jiyoung-ship-it/all.1.2
+
+## 12. Git Clone 및 Pull 실습
+
+GitHub 저장소를 별도 폴더에 복제했습니다.
+
+복제한 프로젝트에서 README.md를 수정한 뒤
+GitHub에 변경 사항을 업로드했습니다.
+
+이후 원래 프로젝트에서 git pull을 실행하여
+최신 변경 사항이 반영되는지 확인했습니다.
