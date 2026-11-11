@@ -1,16 +1,24 @@
 
 # 코디세이 2주차 Python 퀴즈 게임
-# QuizGame 클래스: 게임 전체 기능 관리
+# QuizGame 클래스: 게임 기능 및 JSON 저장 관리
+
+import json
+from pathlib import Path
 
 from quiz import Quiz
 from quiz_data import get_default_quizzes
 
 
+# 이 파일이 있는 폴더에 state.json 저장
+STATE_FILE = Path(__file__).resolve().parent / "state.json"
+
+
 class QuizGame:
     def __init__(self):
-        """게임 데이터 초기화"""
+        """게임 데이터 초기화 및 저장 파일 불러오기"""
         self.quizzes = get_default_quizzes()
         self.best_score = None
+        self.load_state()
 
     def show_menu(self):
         """메인 메뉴 출력"""
@@ -134,6 +142,7 @@ class QuizGame:
         ):
             self.best_score = percentage
             print("새로운 최고 점수를 달성했습니다!")
+            self.save_state()
 
     def add_quiz(self):
         """새로운 퀴즈 추가"""
@@ -176,6 +185,8 @@ class QuizGame:
                 f"{len(self.quizzes)}개"
             )
 
+            self.save_state()
+
         except ValueError as error:
             print(f"퀴즈 등록 실패: {error}")
 
@@ -213,6 +224,104 @@ class QuizGame:
             print(
                 f"현재 최고 점수: "
                 f"{self.best_score}점"
+            )
+
+    def save_state(self):
+        """추가한 퀴즈와 최고 점수를 JSON으로 저장"""
+        default_count = len(get_default_quizzes())
+
+        custom_quizzes = self.quizzes[default_count:]
+
+        data = {
+            "custom_quizzes": [
+                {
+                    "question": quiz.question,
+                    "choices": quiz.choices,
+                    "answer": quiz.answer
+                }
+                for quiz in custom_quizzes
+            ],
+            "best_score": self.best_score
+        }
+
+        try:
+            with open(
+                STATE_FILE, "w", encoding="utf-8"
+            ) as file:
+                json.dump(
+                    data,
+                    file,
+                    ensure_ascii=False,
+                    indent=4
+                )
+
+            print("게임 데이터가 저장되었습니다.")
+
+        except OSError as error:
+            print(f"데이터 저장 실패: {error}")
+
+    def load_state(self):
+        """저장된 JSON 데이터를 불러오기"""
+        try:
+            with open(
+                STATE_FILE, "r", encoding="utf-8"
+            ) as file:
+                data = json.load(file)
+
+        except FileNotFoundError:
+            # 첫 실행 시 저장 파일이 없는 것은 정상
+            return
+
+        except (json.JSONDecodeError, UnicodeError) as error:
+            print(
+                f"저장 파일이 손상되어 기본 데이터로 시작합니다: {error}"
+            )
+            return
+
+        except OSError as error:
+            print(f"데이터 불러오기 실패: {error}")
+            return
+
+        try:
+            if not isinstance(data, dict):
+                raise ValueError("JSON 최상위 데이터는 객체여야 합니다.")
+
+            custom_data = data.get("custom_quizzes", [])
+
+            if not isinstance(custom_data, list):
+                raise ValueError("퀴즈 목록 형식이 올바르지 않습니다.")
+
+            loaded_quizzes = []
+
+            for item in custom_data:
+                if not isinstance(item, dict):
+                    raise ValueError("퀴즈 데이터 형식이 올바르지 않습니다.")
+
+                loaded_quizzes.append(
+                    Quiz(
+                        item["question"],
+                        item["choices"],
+                        item["answer"]
+                    )
+                )
+
+            best_score = data.get("best_score")
+
+            if best_score is not None:
+                if (
+                    type(best_score) not in (int, float)
+                    or not 0 <= best_score <= 100
+                ):
+                    raise ValueError("최고 점수 값이 올바르지 않습니다.")
+
+            self.quizzes.extend(loaded_quizzes)
+            self.best_score = best_score
+
+            print("저장된 게임 데이터를 불러왔습니다.")
+
+        except (ValueError, KeyError, TypeError) as error:
+            print(
+                f"저장 데이터가 올바르지 않아 기본 데이터로 시작합니다: {error}"
             )
 
     def run(self):
