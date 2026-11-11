@@ -8,26 +8,22 @@ from quiz import Quiz
 from quiz_data import get_default_quizzes
 
 
-# JSON 파일 저장 경로
+# 프로젝트 루트에 저장되는 JSON 파일
 STATE_FILE = Path(__file__).resolve().parent / "state.json"
 
 
 class QuizGame:
     def __init__(self):
-        # 기본 퀴즈 목록
+        # 기본 퀴즈와 최고 점수, 풀이 기록 초기화
         self.quizzes = get_default_quizzes()
-
-        # 최고 점수
         self.best_score = None
-
-        # 퀴즈 풀이 기록
         self.history = []
 
-        # 기존 JSON 데이터 불러오기
+        # 기존 저장 데이터 불러오기
         self.load_state()
 
     def show_menu(self):
-        # 메인 메뉴 출력
+        # 게임의 메인 메뉴 출력
         print("\n===== 나만의 퀴즈 게임 =====")
         print("1. 퀴즈 풀기")
         print("2. 퀴즈 추가하기")
@@ -39,12 +35,10 @@ class QuizGame:
         print("==========================")
 
     def get_menu_choice(self):
-        # 메뉴 번호 입력 검증
+        # 메뉴 번호 입력 및 예외 처리
         while True:
             try:
-                value = input(
-                    "메뉴 번호를 선택하세요 (1~7): "
-                ).strip()
+                value = input("메뉴 번호를 선택하세요 (1~7): ").strip()
 
                 if not value:
                     print("입력값이 비어 있습니다.")
@@ -69,12 +63,14 @@ class QuizGame:
         # 퀴즈 등록 시 정답 번호 입력
         while True:
             try:
-                value = input(
-                    "정답 번호 (1~4): "
-                ).strip()
+                value = input("정답 번호 (1~4): ").strip()
+
+                if not value:
+                    print("정답 번호를 입력하세요.")
+                    continue
 
                 if not value.isdigit():
-                    print("1~4 사이의 숫자를 입력하세요.")
+                    print("숫자만 입력할 수 있습니다.")
                     continue
 
                 number = int(value)
@@ -89,7 +85,7 @@ class QuizGame:
                 return None
 
     def get_nonempty_input(self, prompt):
-        # 빈 문자열 입력 방지
+        # 빈 입력 방지
         while True:
             try:
                 value = input(prompt).strip()
@@ -103,8 +99,21 @@ class QuizGame:
                 print("\n입력이 취소되었습니다.")
                 return None
 
+    def get_optional_hint(self):
+        # 퀴즈 추가 시 힌트는 선택적으로 입력
+        try:
+            hint = input(
+                "힌트를 입력하세요 (생략하려면 Enter): "
+            ).strip()
+
+            return hint if hint else None
+
+        except (KeyboardInterrupt, EOFError):
+            print("\n힌트 입력이 취소되었습니다.")
+            return None
+
     def get_quiz_count(self):
-        # 풀 문제 개수 선택
+        # 사용자가 풀 문제 개수 선택
         total = len(self.quizzes)
 
         print("\n===== 퀴즈 시작 =====")
@@ -136,7 +145,7 @@ class QuizGame:
                 return None
 
     def get_answer_with_hint(self, quiz):
-        # 정답 입력 및 힌트 기능
+        # 문제 풀이 중 힌트 사용 여부 관리
         hint_used = False
 
         while True:
@@ -146,64 +155,67 @@ class QuizGame:
                 ).strip().lower()
 
                 if value == "h":
-                    # 힌트 중복 사용 방지
                     if hint_used:
-                        print(
-                            "이 문제에서는 이미 힌트를 사용했습니다."
-                        )
+                        print("이미 힌트를 사용했습니다.")
                         continue
 
                     hint_used = True
 
-                    # 오답 3개 중 2개 무작위 제거
-                    wrong_choices = [
-                        number
-                        for number in range(1, 5)
-                        if number != quiz.answer
-                    ]
+                    # Quiz 클래스에 등록된 힌트 확인
+                    registered_hint = quiz.get_hint()
 
-                    removed_choices = random.sample(
-                        wrong_choices, 2
-                    )
+                    if registered_hint:
+                        # 직접 작성한 힌트 출력
+                        print(f"\n[힌트] {registered_hint}")
 
-                    remaining_choices = [
-                        number
-                        for number in range(1, 5)
-                        if number not in removed_choices
-                    ]
+                    else:
+                        # 등록된 힌트가 없으면 오답 2개 제거
+                        wrong_choices = [
+                            number
+                            for number in range(1, 5)
+                            if number != quiz.answer
+                        ]
 
-                    print(
-                        "\n[힌트] 정답이 아닌 선택지 "
-                        "2개를 제외합니다."
-                    )
-
-                    print(
-                        "남은 선택지: "
-                        + ", ".join(
-                            f"{number}번"
-                            for number in remaining_choices
+                        removed_choices = random.sample(
+                            wrong_choices, 2
                         )
-                    )
+
+                        remaining_choices = [
+                            number
+                            for number in range(1, 5)
+                            if number not in removed_choices
+                        ]
+
+                        print(
+                            "\n[힌트] 오답 선택지 2개를 제외합니다."
+                        )
+                        print(
+                            "남은 선택지: "
+                            + ", ".join(
+                                f"{number}번"
+                                for number in remaining_choices
+                            )
+                        )
 
                     print(
-                        "힌트를 사용했으므로 이 문제는 "
-                        "정답을 맞혀도 50점만 인정됩니다."
+                        "힌트 사용 시 정답 점수는 50점입니다."
                     )
                     continue
 
+                if not value:
+                    print("정답 번호 또는 h를 입력하세요.")
+                    continue
+
                 if not value.isdigit():
-                    print(
-                        "1~4 사이의 숫자 또는 h를 입력하세요."
-                    )
+                    print("1~4 사이의 숫자 또는 h를 입력하세요.")
                     continue
 
                 answer = int(value)
 
-                if not 1 <= answer <= 4:
-                    print("1~4 사이의 숫자를 입력하세요.")
-                    continue
+                if 1 <= answer <= 4:
+                    return answer, hint_used
 
-                return answer, hint_used
+                print("1~4 사이의 숫자를 입력하세요.")
 
             except (KeyboardInterrupt, EOFError):
                 print("\n퀴즈 풀이가 중단되었습니다.")
@@ -215,13 +227,12 @@ class QuizGame:
             print("\n등록된 퀴즈가 없습니다.")
             return
 
-        # 풀 문제 개수 선택
         selected_count = self.get_quiz_count()
 
         if selected_count is None:
             return
 
-        # 중복 없이 무작위로 문제 추출
+        # 문제 순서를 무작위로 선택
         selected_quizzes = random.sample(
             self.quizzes, selected_count
         )
@@ -247,24 +258,23 @@ class QuizGame:
                 print("퀴즈 풀이를 종료합니다.")
                 return
 
-            # 힌트 사용 횟수 누적
             if hint_used:
                 hint_count += 1
 
             if quiz.check_answer(answer):
                 correct_count += 1
 
-                # 힌트 사용 여부에 따른 점수
                 points = 50 if hint_used else 100
                 total_points += points
 
                 print(f"정답입니다! (+{points}점)")
+
             else:
                 print(
                     f"오답입니다. 정답은 {quiz.answer}번입니다."
                 )
 
-        # 최종 점수 계산
+        # 선택한 문제 개수를 기준으로 점수 계산
         percentage = round(total_points / total, 1)
 
         print("\n===== 퀴즈 결과 =====")
@@ -281,7 +291,7 @@ class QuizGame:
             self.best_score = percentage
             print("새로운 최고 점수를 달성했습니다!")
 
-        # 완료된 퀴즈의 날짜와 결과 기록
+        # 날짜와 시간을 포함한 풀이 기록 생성
         record = {
             "date": datetime.now().strftime(
                 "%Y-%m-%d %H:%M:%S"
@@ -293,8 +303,6 @@ class QuizGame:
         }
 
         self.history.append(record)
-
-        # 최고 점수와 풀이 기록 함께 저장
         self.save_state()
 
         print("이번 퀴즈 풀이 기록이 저장되었습니다.")
@@ -327,8 +335,14 @@ class QuizGame:
         if answer is None:
             return
 
+        # Quiz 클래스의 hint 속성에 저장할 내용
+        hint = self.get_optional_hint()
+
         try:
-            new_quiz = Quiz(question, choices, answer)
+            new_quiz = Quiz(
+                question, choices, answer, hint
+            )
+
             self.quizzes.append(new_quiz)
 
             print("\n새로운 퀴즈가 등록되었습니다!")
@@ -342,7 +356,7 @@ class QuizGame:
             print(f"퀴즈 등록 실패: {error}")
 
     def show_quiz_list(self):
-        # 등록된 퀴즈 목록 출력
+        # 등록된 퀴즈 목록 확인
         print("\n===== 전체 퀴즈 목록 =====")
 
         if not self.quizzes:
@@ -350,8 +364,7 @@ class QuizGame:
             return
 
         print(
-            f"총 {len(self.quizzes)}개의 "
-            "퀴즈가 등록되어 있습니다."
+            f"총 {len(self.quizzes)}개의 퀴즈가 등록되어 있습니다."
         )
 
         for index, quiz in enumerate(
@@ -361,10 +374,13 @@ class QuizGame:
             quiz.display()
             print(f"정답: {quiz.answer}번")
 
+            if quiz.get_hint():
+                print(f"등록된 힌트: {quiz.get_hint()}")
+
         print("\n===== 목록 출력 완료 =====")
 
     def delete_quiz(self):
-        # 퀴즈 삭제 기능
+        # 퀴즈 삭제
         print("\n===== 퀴즈 삭제 =====")
 
         if not self.quizzes:
@@ -384,6 +400,10 @@ class QuizGame:
                     "\n삭제할 퀴즈 번호 (0: 취소): "
                 ).strip()
 
+                if not value:
+                    print("삭제할 퀴즈 번호를 입력하세요.")
+                    continue
+
                 if not value.isdigit():
                     print("숫자만 입력할 수 있습니다.")
                     continue
@@ -397,15 +417,12 @@ class QuizGame:
                 if 1 <= number <= total:
                     break
 
-                print(
-                    f"1~{total} 사이의 번호를 입력하세요."
-                )
+                print(f"1~{total} 사이의 번호를 입력하세요.")
 
             except (KeyboardInterrupt, EOFError):
                 print("\n퀴즈 삭제가 취소되었습니다.")
                 return
 
-        # 삭제 여부 확인
         while True:
             try:
                 confirm = input(
@@ -418,8 +435,7 @@ class QuizGame:
                     )
 
                     print(
-                        f"\n삭제된 퀴즈: "
-                        f"{deleted_quiz.question}"
+                        f"\n삭제된 퀴즈: {deleted_quiz.question}"
                     )
                     print("퀴즈가 삭제되었습니다.")
 
@@ -437,21 +453,16 @@ class QuizGame:
                 return
 
     def show_best_score(self):
-        # 최고 점수 확인
+        # 최고 점수 출력
         print("\n===== 최고 점수 =====")
 
         if self.best_score is None:
-            print(
-                "아직 퀴즈를 완료한 기록이 없습니다."
-            )
+            print("아직 퀴즈를 완료한 기록이 없습니다.")
         else:
-            print(
-                f"현재 최고 점수: "
-                f"{self.best_score}점"
-            )
+            print(f"현재 최고 점수: {self.best_score}점")
 
     def show_history(self):
-        # 저장된 퀴즈 풀이 기록 출력
+        # 전체 퀴즈 풀이 기록 출력
         print("\n===== 퀴즈 풀이 기록 =====")
 
         if not self.history:
@@ -461,34 +472,27 @@ class QuizGame:
         for index, record in enumerate(
             self.history, start=1
         ):
+            print(f"\n{index}회차 | {record['date']}")
+            print(f"문제 수: {record['total']}개")
             print(
-                f"\n{index}회차 | {record['date']}"
+                f"정답: {record['correct']}/{record['total']}"
             )
             print(
-                f"문제 수: {record['total']}개"
+                f"힌트 사용: {record['hints_used']}회"
             )
-            print(
-                f"정답: {record['correct']}/"
-                f"{record['total']}"
-            )
-            print(
-                f"힌트 사용: "
-                f"{record['hints_used']}회"
-            )
-            print(
-                f"최종 점수: {record['score']}점"
-            )
+            print(f"최종 점수: {record['score']}점")
 
         print("\n===== 기록 출력 완료 =====")
 
     def save_state(self):
-        # 전체 퀴즈, 최고 점수, 풀이 기록 저장
+        # 전체 퀴즈, 최고 점수, 풀이 기록을 JSON에 저장
         data = {
             "quizzes": [
                 {
                     "question": quiz.question,
                     "choices": quiz.choices,
-                    "answer": quiz.answer
+                    "answer": quiz.answer,
+                    "hint": quiz.get_hint()
                 }
                 for quiz in self.quizzes
             ],
@@ -508,12 +512,14 @@ class QuizGame:
                 )
 
             print("게임 데이터가 저장되었습니다.")
+            return True
 
-        except OSError as error:
+        except (OSError, UnicodeError) as error:
             print(f"데이터 저장 실패: {error}")
+            return False
 
     def load_state(self):
-        # 기존 JSON 파일 읽기
+        # JSON 데이터 불러오기
         try:
             with open(
                 STATE_FILE, "r", encoding="utf-8"
@@ -543,7 +549,7 @@ class QuizGame:
                     "JSON 최상위 데이터는 객체여야 합니다."
                 )
 
-            # 최신 JSON 저장 형식
+            # 최신 JSON 형식
             if "quizzes" in data:
                 quiz_data = data["quizzes"]
 
@@ -564,11 +570,12 @@ class QuizGame:
                         Quiz(
                             item["question"],
                             item["choices"],
-                            item["answer"]
+                            item["answer"],
+                            item.get("hint")
                         )
                     )
 
-            # 이전 JSON 저장 형식과 호환
+            # 이전 버전의 JSON 형식도 지원
             else:
                 custom_data = data.get(
                     "custom_quizzes", []
@@ -591,11 +598,12 @@ class QuizGame:
                         Quiz(
                             item["question"],
                             item["choices"],
-                            item["answer"]
+                            item["answer"],
+                            item.get("hint")
                         )
                     )
 
-            # 최고 점수 유효성 검사
+            # 최고 점수 검증
             best_score = data.get("best_score")
 
             if best_score is not None:
@@ -607,7 +615,7 @@ class QuizGame:
                         "최고 점수 값이 올바르지 않습니다."
                     )
 
-            # 풀이 기록 불러오기
+            # 풀이 기록 검증
             history = data.get("history", [])
 
             if not isinstance(history, list):
@@ -615,7 +623,6 @@ class QuizGame:
                     "풀이 기록 형식이 올바르지 않습니다."
                 )
 
-            # 기록 데이터의 필수 항목 검사
             for record in history:
                 if not isinstance(record, dict):
                     raise ValueError(
@@ -650,10 +657,10 @@ class QuizGame:
                     or not 0 <= record["score"] <= 100
                 ):
                     raise ValueError(
-                        "풀이 기록의 값이 올바르지 않습니다."
+                        "풀이 기록 값이 올바르지 않습니다."
                     )
 
-            # 모든 검사 통과 후 데이터 반영
+            # 검증을 통과한 데이터만 적용
             self.quizzes = loaded_quizzes
             self.best_score = best_score
             self.history = history
@@ -671,29 +678,37 @@ class QuizGame:
             )
 
     def run(self):
-        # 게임 메인 반복문
-        while True:
-            self.show_menu()
-            choice = self.get_menu_choice()
+        # 게임 전체 실행
+        try:
+            while True:
+                self.show_menu()
+                choice = self.get_menu_choice()
 
-            if choice == 1:
-                self.play_quiz()
+                if choice == 1:
+                    self.play_quiz()
 
-            elif choice == 2:
-                self.add_quiz()
+                elif choice == 2:
+                    self.add_quiz()
 
-            elif choice == 3:
-                self.show_quiz_list()
+                elif choice == 3:
+                    self.show_quiz_list()
 
-            elif choice == 4:
-                self.show_best_score()
+                elif choice == 4:
+                    self.show_best_score()
 
-            elif choice == 5:
-                self.delete_quiz()
+                elif choice == 5:
+                    self.delete_quiz()
 
-            elif choice == 6:
-                self.show_history()
+                elif choice == 6:
+                    self.show_history()
 
-            elif choice == 7:
-                print("\n게임을 종료합니다.")
-                break
+                elif choice == 7:
+                    break
+
+        except (KeyboardInterrupt, EOFError):
+            print("\n입력이 중단되어 안전하게 종료합니다.")
+
+        finally:
+            # 정상 종료와 예외 종료 모두 저장 시도
+            self.save_state()
+            print("\n게임을 종료합니다.")
