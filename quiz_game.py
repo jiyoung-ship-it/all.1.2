@@ -13,13 +13,13 @@ STATE_FILE = Path(__file__).resolve().parent / "state.json"
 
 class QuizGame:
     def __init__(self):
-        # 기본 퀴즈 불러오기
+        # 기본 퀴즈 목록 생성
         self.quizzes = get_default_quizzes()
 
         # 최고 점수 초기화
         self.best_score = None
 
-        # 기존에 저장된 퀴즈 및 최고 점수 불러오기
+        # 저장된 퀴즈와 최고 점수 불러오기
         self.load_state()
 
     def show_menu(self):
@@ -33,7 +33,7 @@ class QuizGame:
         print("==========================")
 
     def get_menu_choice(self):
-        # 메뉴 입력값 검증
+        # 메뉴 번호 입력 검증
         while True:
             try:
                 choice = input("메뉴 번호를 선택하세요 (1~5): ").strip()
@@ -48,18 +48,17 @@ class QuizGame:
 
                 number = int(choice)
 
-                if not 1 <= number <= 5:
-                    print("1~5 사이의 숫자를 입력하세요.")
-                    continue
+                if 1 <= number <= 5:
+                    return number
 
-                return number
+                print("1~5 사이의 숫자를 입력하세요.")
 
             except (KeyboardInterrupt, EOFError):
                 print("\n입력이 종료되었습니다.")
                 return 5
 
     def get_answer(self):
-        # 정답 번호 입력 및 검증
+        # 정답 번호 입력 검증
         while True:
             try:
                 answer = input("정답 번호 (1~4): ").strip()
@@ -94,27 +93,65 @@ class QuizGame:
                 print("\n입력이 취소되었습니다.")
                 return None
 
+    def get_quiz_count(self):
+        # 사용자가 풀 문제 개수 선택
+        total = len(self.quizzes)
+
+        print("\n===== 퀴즈 시작 =====")
+        print(f"현재 등록된 퀴즈: {total}개")
+
+        while True:
+            try:
+                value = input(
+                    f"몇 문제를 풀겠습니까? (1~{total}): "
+                ).strip()
+
+                if not value:
+                    print("문제 개수를 입력해야 합니다.")
+                    continue
+
+                if not value.isdigit():
+                    print("숫자만 입력할 수 있습니다.")
+                    continue
+
+                count = int(value)
+
+                if 1 <= count <= total:
+                    return count
+
+                print(f"1~{total} 사이의 숫자를 입력하세요.")
+
+            except (KeyboardInterrupt, EOFError):
+                print("\n문제 개수 선택이 취소되었습니다.")
+                return None
+
     def play_quiz(self):
         # 퀴즈가 없는 경우 실행 중단
         if not self.quizzes:
             print("\n등록된 퀴즈가 없습니다.")
             return
 
+        # 사용자가 풀 문제 개수 입력
+        selected_count = self.get_quiz_count()
+
+        if selected_count is None:
+            return
+
+        # 전체 퀴즈 중 선택한 개수만큼 무작위 추출
+        # 같은 문제가 중복 출제되지 않음
+        selected_quizzes = random.sample(
+            self.quizzes,
+            selected_count
+        )
+
         score = 0
-
-        # 원본 퀴즈 목록을 복사하여 무작위로 섞기
-        # 원본 데이터의 순서는 변경하지 않음
-        shuffled_quizzes = self.quizzes.copy()
-        random.shuffle(shuffled_quizzes)
-
-        # 무작위로 섞인 퀴즈 개수
-        total = len(shuffled_quizzes)
+        total = len(selected_quizzes)
 
         print(f"\n총 {total}개의 퀴즈를 시작합니다!")
         print("문제는 무작위 순서로 출제됩니다.")
 
-        # 무작위 순서로 문제 출제
-        for index, quiz in enumerate(shuffled_quizzes, start=1):
+        # 선택한 개수만큼 문제 출제
+        for index, quiz in enumerate(selected_quizzes, start=1):
             print(f"\n===== {index}번 문제 / {total} =====")
             quiz.display()
 
@@ -130,21 +167,21 @@ class QuizGame:
             else:
                 print(f"오답입니다. 정답은 {quiz.answer}번입니다.")
 
-        # 최종 점수 계산
+        # 선택한 문제 개수를 기준으로 점수 계산
         percentage = round(score / total * 100, 1)
 
         print("\n===== 퀴즈 결과 =====")
         print(f"정답 개수: {score}/{total}")
         print(f"최종 점수: {percentage}점")
 
-        # 최고 점수 갱신 및 저장
+        # 최고 점수 갱신
         if self.best_score is None or percentage > self.best_score:
             self.best_score = percentage
             print("새로운 최고 점수를 달성했습니다!")
             self.save_state()
 
     def add_quiz(self):
-        # 사용자 퀴즈 추가 기능
+        # 사용자 퀴즈 추가
         print("\n===== 새로운 퀴즈 추가 =====")
 
         question = self.get_nonempty_input("문제를 입력하세요: ")
@@ -154,7 +191,6 @@ class QuizGame:
 
         choices = []
 
-        # 선택지 4개 입력
         for number in range(1, 5):
             choice = self.get_nonempty_input(f"{number}번 선택지: ")
 
@@ -163,7 +199,6 @@ class QuizGame:
 
             choices.append(choice)
 
-        # 정답 번호 입력
         answer = self.get_answer()
 
         if answer is None:
@@ -176,7 +211,6 @@ class QuizGame:
             print("\n새로운 퀴즈가 등록되었습니다!")
             print(f"현재 등록된 퀴즈: {len(self.quizzes)}개")
 
-            # 추가된 퀴즈를 JSON 파일에 저장
             self.save_state()
 
         except ValueError as error:
@@ -200,7 +234,7 @@ class QuizGame:
         print("\n===== 목록 출력 완료 =====")
 
     def show_best_score(self):
-        # 저장된 최고 점수 출력
+        # 최고 점수 출력
         print("\n===== 최고 점수 =====")
 
         if self.best_score is None:
@@ -209,7 +243,7 @@ class QuizGame:
             print(f"현재 최고 점수: {self.best_score}점")
 
     def save_state(self):
-        # 기본 퀴즈를 제외한 사용자 추가 퀴즈만 저장
+        # 기본 퀴즈를 제외하고 추가 퀴즈만 저장
         default_count = len(get_default_quizzes())
         custom_quizzes = self.quizzes[default_count:]
 
@@ -235,13 +269,12 @@ class QuizGame:
             print(f"데이터 저장 실패: {error}")
 
     def load_state(self):
-        # 저장된 JSON 데이터 불러오기
+        # JSON 데이터 불러오기
         try:
             with open(STATE_FILE, "r", encoding="utf-8") as file:
                 data = json.load(file)
 
         except FileNotFoundError:
-            # 처음 실행하여 저장 파일이 없는 경우
             return
 
         except (json.JSONDecodeError, UnicodeError) as error:
@@ -252,7 +285,7 @@ class QuizGame:
             print(f"데이터 불러오기 실패: {error}")
             return
 
-        # JSON 데이터 형식 검사
+        # 저장 데이터 유효성 검사
         try:
             if not isinstance(data, dict):
                 raise ValueError("JSON 최상위 데이터는 객체여야 합니다.")
@@ -285,7 +318,6 @@ class QuizGame:
                 ):
                     raise ValueError("최고 점수 값이 올바르지 않습니다.")
 
-            # 정상적인 데이터만 게임에 반영
             self.quizzes.extend(loaded_quizzes)
             self.best_score = best_score
 
@@ -295,7 +327,7 @@ class QuizGame:
             print(f"저장 데이터가 올바르지 않아 기본 데이터로 시작합니다: {error}")
 
     def run(self):
-        # 프로그램 메인 실행 반복문
+        # 메인 실행 반복문
         while True:
             self.show_menu()
             choice = self.get_menu_choice()
