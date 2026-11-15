@@ -376,3 +376,5 @@ GitHub 저장소를 별도 폴더에 복제했습니다.
 별도의 작업 브랜치에서 문서를 수정하고 커밋한 후, main 브랜치로 병합하여 Git 협업 과정을 검증했습니다.
 
 병합 시 --no-ff 옵션을 사용하여 브랜치 병합 이력이 Git 그래프에 남도록 했습니다.
+
+커밋 10개 이상 증빙: https://github.com/jiyoung-ship-it/all.1.2/commits/main/
