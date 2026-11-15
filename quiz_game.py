@@ -1,6 +1,9 @@
 
 import json
 import random
+import os
+import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +13,7 @@ from quiz_data import get_default_quizzes
 
 # 프로젝트 루트에 저장되는 JSON 파일
 STATE_FILE = Path(__file__).resolve().parent / "state.json"
+BACKUP_FILE = STATE_FILE.with_name("state.json.bak")
 
 
 class QuizGame:
@@ -18,6 +22,7 @@ class QuizGame:
         self.quizzes = get_default_quizzes()
         self.best_score = None
         self.history = []
+        self.storage_safe = True  # 손상된 파일을 덮어쓰지 않도록 보호
 
         # 기존 저장 데이터 불러오기
         self.load_state()
@@ -484,8 +489,153 @@ class QuizGame:
 
         print("\n===== 기록 출력 완료 =====")
 
+    def _validate_state(self, data):
+        # 원본과 백업 모두 같은 검증을 거친다.
+        if not isinstance(data, dict):
+            raise ValueError(
+                "JSON 최상위 데이터는 객체여야 합니다."
+            )
+
+        # 최신 JSON 형식
+        if "quizzes" in data:
+            quiz_data = data["quizzes"]
+
+            if not isinstance(quiz_data, list):
+                raise ValueError(
+                    "퀴즈 목록 형식이 올바르지 않습니다."
+                )
+
+            loaded_quizzes = []
+
+            for item in quiz_data:
+                if not isinstance(item, dict):
+                    raise ValueError(
+                        "퀴즈 데이터 형식이 올바르지 않습니다."
+                    )
+
+                loaded_quizzes.append(
+                    Quiz(
+                        item["question"],
+                        item["choices"],
+                        item["answer"],
+                        item.get("hint")
+                    )
+                )
+
+        # 이전 버전의 JSON 형식도 지원
+        else:
+            custom_data = data.get(
+                "custom_quizzes", []
+            )
+
+            if not isinstance(custom_data, list):
+                raise ValueError(
+                    "퀴즈 목록 형식이 올바르지 않습니다."
+                )
+
+            loaded_quizzes = get_default_quizzes()
+
+            for item in custom_data:
+                if not isinstance(item, dict):
+                    raise ValueError(
+                        "퀴즈 데이터 형식이 올바르지 않습니다."
+                    )
+
+                loaded_quizzes.append(
+                    Quiz(
+                        item["question"],
+                        item["choices"],
+                        item["answer"],
+                        item.get("hint")
+                    )
+                )
+
+        # 최고 점수 검증
+        best_score = data.get("best_score")
+
+        if best_score is not None:
+            if (
+                type(best_score) not in (int, float)
+                or not 0 <= best_score <= 100
+            ):
+                raise ValueError(
+                    "최고 점수 값이 올바르지 않습니다."
+                )
+
+        # 풀이 기록 검증
+        history = data.get("history", [])
+
+        if not isinstance(history, list):
+            raise ValueError(
+                "풀이 기록 형식이 올바르지 않습니다."
+            )
+
+        for record in history:
+            if not isinstance(record, dict):
+                raise ValueError(
+                    "풀이 기록 데이터가 올바르지 않습니다."
+                )
+
+            required_keys = (
+                "date",
+                "total",
+                "correct",
+                "hints_used",
+                "score"
+            )
+
+            if not all(
+                key in record
+                for key in required_keys
+            ):
+                raise ValueError(
+                    "풀이 기록에 필요한 정보가 없습니다."
+                )
+
+            if (
+                not isinstance(record["date"], str)
+                or type(record["total"]) is not int
+                or record["total"] < 1
+                or type(record["correct"]) is not int
+                or not 0 <= record["correct"] <= record["total"]
+                or type(record["hints_used"]) is not int
+                or not 0 <= record["hints_used"] <= record["total"]
+                or type(record["score"]) not in (int, float)
+                or not 0 <= record["score"] <= 100
+            ):
+                raise ValueError(
+                    "풀이 기록 값이 올바르지 않습니다."
+                )
+        return loaded_quizzes, best_score, history
+
+    def _read_valid_state(self, path):
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+        return self._validate_state(data)
+
+    def _atomic_write(self, destination, data):
+        # 같은 폴더에 임시 파일을 쓰고 성공한 경우에만 교체한다.
+        temp_name = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=destination.parent,
+                prefix=".quiz_", suffix=".tmp", delete=False
+            ) as file:
+                temp_name = file.name
+                json.dump(data, file, ensure_ascii=False, indent=4)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temp_name, destination)
+        finally:
+            if temp_name is not None and os.path.exists(temp_name):
+                os.unlink(temp_name)
+
     def save_state(self):
-        # 전체 퀴즈, 최고 점수, 풀이 기록을 JSON에 저장
+        # 손상된 원본을 기본 데이터로 덮어쓰지 않는다.
+        if not self.storage_safe:
+            print("저장 중단: 기존 데이터 손상 또는 읽기 오류가 해결되지 않았습니다.")
+            return False
+
         data = {
             "quizzes": [
                 {
@@ -501,181 +651,68 @@ class QuizGame:
         }
 
         try:
-            with open(
-                STATE_FILE, "w", encoding="utf-8"
-            ) as file:
-                json.dump(
-                    data,
-                    file,
-                    ensure_ascii=False,
-                    indent=4
-                )
+            # 기존 원본이 유효할 때만 백업한다.
+            if STATE_FILE.exists():
+                self._read_valid_state(STATE_FILE)
+                # 기존 백업을 덮기 전에 원본을 임시 파일에 복사한다.
+                backup_temp = BACKUP_FILE.with_name(BACKUP_FILE.name + ".tmp")
+                try:
+                    shutil.copy2(STATE_FILE, backup_temp)
+                    os.replace(backup_temp, BACKUP_FILE)
+                finally:
+                    if backup_temp.exists():
+                        backup_temp.unlink()
 
+            self._atomic_write(STATE_FILE, data)
+            # 첫 저장이라면 복구 가능한 백업도 만든다.
+            if not BACKUP_FILE.exists():
+                shutil.copy2(STATE_FILE, BACKUP_FILE)
             print("게임 데이터가 저장되었습니다.")
             return True
 
-        except (OSError, UnicodeError) as error:
+        except (OSError, UnicodeError, ValueError, KeyError,
+                TypeError, json.JSONDecodeError) as error:
             print(f"데이터 저장 실패: {error}")
+            print("기존 저장 파일과 백업을 확인한 후 다시 시도하세요.")
             return False
 
     def load_state(self):
-        # JSON 데이터 불러오기
+        # 원본이 없거나 손상되면 백업에서 복구한다.
         try:
-            with open(
-                STATE_FILE, "r", encoding="utf-8"
-            ) as file:
-                data = json.load(file)
-
-        except FileNotFoundError:
-            return
-
-        except (
-            json.JSONDecodeError,
-            UnicodeError
-        ) as error:
-            print(
-                "저장 파일이 손상되어 "
-                f"기본 데이터로 시작합니다: {error}"
-            )
-            return
-
-        except OSError as error:
-            print(f"데이터 불러오기 실패: {error}")
-            return
-
-        try:
-            if not isinstance(data, dict):
-                raise ValueError(
-                    "JSON 최상위 데이터는 객체여야 합니다."
-                )
-
-            # 최신 JSON 형식
-            if "quizzes" in data:
-                quiz_data = data["quizzes"]
-
-                if not isinstance(quiz_data, list):
-                    raise ValueError(
-                        "퀴즈 목록 형식이 올바르지 않습니다."
-                    )
-
-                loaded_quizzes = []
-
-                for item in quiz_data:
-                    if not isinstance(item, dict):
-                        raise ValueError(
-                            "퀴즈 데이터 형식이 올바르지 않습니다."
-                        )
-
-                    loaded_quizzes.append(
-                        Quiz(
-                            item["question"],
-                            item["choices"],
-                            item["answer"],
-                            item.get("hint")
-                        )
-                    )
-
-            # 이전 버전의 JSON 형식도 지원
+            if STATE_FILE.exists():
+                loaded = self._read_valid_state(STATE_FILE)
+                print("저장된 게임 데이터를 불러왔습니다.")
+            elif BACKUP_FILE.exists():
+                print("원본 파일이 없어 백업 복원을 시도합니다.")
+                loaded = self._read_valid_state(BACKUP_FILE)
+                shutil.copy2(BACKUP_FILE, STATE_FILE)
+                print("백업에서 게임 데이터를 복원했습니다.")
             else:
-                custom_data = data.get(
-                    "custom_quizzes", []
-                )
+                return
 
-                if not isinstance(custom_data, list):
-                    raise ValueError(
-                        "퀴즈 목록 형식이 올바르지 않습니다."
-                    )
+        except (OSError, UnicodeError, ValueError, KeyError,
+                TypeError, json.JSONDecodeError) as error:
+            print(f"원본 데이터를 읽을 수 없습니다: {error}")
+            try:
+                loaded = self._read_valid_state(BACKUP_FILE)
+                # 손상된 원본은 보존하고 복원본을 원본에 기록한다.
+                if STATE_FILE.exists():
+                    damaged = STATE_FILE.with_name("state.json.damaged")
+                    if damaged.exists():
+                        print("기존 손상 파일 보관본이 있어 자동 복원을 중단합니다.")
+                        self.storage_safe = False
+                        return
+                    os.replace(STATE_FILE, damaged)
+                shutil.copy2(BACKUP_FILE, STATE_FILE)
+                print("백업에서 게임 데이터를 복원했습니다.")
+            except (OSError, UnicodeError, ValueError, KeyError,
+                    TypeError, json.JSONDecodeError) as backup_error:
+                print(f"백업 복원 실패: {backup_error}")
+                print("데이터 보호를 위해 자동 저장을 중단합니다.")
+                self.storage_safe = False
+                return
 
-                loaded_quizzes = get_default_quizzes()
-
-                for item in custom_data:
-                    if not isinstance(item, dict):
-                        raise ValueError(
-                            "퀴즈 데이터 형식이 올바르지 않습니다."
-                        )
-
-                    loaded_quizzes.append(
-                        Quiz(
-                            item["question"],
-                            item["choices"],
-                            item["answer"],
-                            item.get("hint")
-                        )
-                    )
-
-            # 최고 점수 검증
-            best_score = data.get("best_score")
-
-            if best_score is not None:
-                if (
-                    type(best_score) not in (int, float)
-                    or not 0 <= best_score <= 100
-                ):
-                    raise ValueError(
-                        "최고 점수 값이 올바르지 않습니다."
-                    )
-
-            # 풀이 기록 검증
-            history = data.get("history", [])
-
-            if not isinstance(history, list):
-                raise ValueError(
-                    "풀이 기록 형식이 올바르지 않습니다."
-                )
-
-            for record in history:
-                if not isinstance(record, dict):
-                    raise ValueError(
-                        "풀이 기록 데이터가 올바르지 않습니다."
-                    )
-
-                required_keys = (
-                    "date",
-                    "total",
-                    "correct",
-                    "hints_used",
-                    "score"
-                )
-
-                if not all(
-                    key in record
-                    for key in required_keys
-                ):
-                    raise ValueError(
-                        "풀이 기록에 필요한 정보가 없습니다."
-                    )
-
-                if (
-                    not isinstance(record["date"], str)
-                    or type(record["total"]) is not int
-                    or record["total"] < 1
-                    or type(record["correct"]) is not int
-                    or not 0 <= record["correct"] <= record["total"]
-                    or type(record["hints_used"]) is not int
-                    or not 0 <= record["hints_used"] <= record["total"]
-                    or type(record["score"]) not in (int, float)
-                    or not 0 <= record["score"] <= 100
-                ):
-                    raise ValueError(
-                        "풀이 기록 값이 올바르지 않습니다."
-                    )
-
-            # 검증을 통과한 데이터만 적용
-            self.quizzes = loaded_quizzes
-            self.best_score = best_score
-            self.history = history
-
-            print("저장된 게임 데이터를 불러왔습니다.")
-
-        except (
-            ValueError,
-            KeyError,
-            TypeError
-        ) as error:
-            print(
-                "저장 데이터가 올바르지 않아 "
-                f"기본 데이터로 시작합니다: {error}"
-            )
+        self.quizzes, self.best_score, self.history = loaded
 
     def run(self):
         # 게임 전체 실행
