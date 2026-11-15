@@ -958,3 +958,7 @@ GitHub 저장소를 별도 폴더에 복제했습니다.
 7. **오류 안내 개선:** 저장 실패 시 사용자에게 복구 방법과 재시도 절차 안내
 
 위 항목은 향후 개선 계획이며, 이미 구현된 자동 백업·복원 및 임시 파일 저장 기능과 구분됩니다.
+
+![git clone 실행 화면](docs/screenshots/git_clone.png)
+
+![git pull 실행 화면](docs/screenshots/git_pull.png)
